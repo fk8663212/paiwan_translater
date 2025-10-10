@@ -1,0 +1,412 @@
+{
+  "name": "Paiwan to Chinese api",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/translate/paiwan-to-chinese",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.token }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        460
+      ],
+      "id": "8411e95e-af54-4527-a12a-239eb0222026",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 錯誤示例：每拆一個 token 就 return 一筆\nconst paiwan = $input.first().json.paiwan_sentences;\nconst rawTokens = paiwan.split(/[\\s,，、]+/);\nconst tokens = rawTokens.filter(t => t.trim().length > 0);\nconst results = tokens.map(token => ({ json: { token: token } }));\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        460
+      ],
+      "id": "d4570cff-164d-4e00-ab8c-916d27bd5ffe",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "model": "gemma3:1b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        800
+      ],
+      "id": "7e3b6b7f-a37f-416f-a859-3875e28d28a7",
+      "name": "Ollama Chat Model1",
+      "credentials": {
+        "ollamaApi": {
+          "id": "5sOxZ8EFeMjX6tN3",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n 的 Function 節點預設會傳進 $input 變數裡面是「一個 items 陣列」，\n// 這裡假設上游只傳來一筆或多筆，但每筆裡的 data 屬性都要解析。\n\n// 我們要回傳一個 Array，包含解析後的物件\nconst newItems = [];\n\n// 遍歷所有輸入 item\nfor (const item of $input.all()) {\n  // 1. 取得目前 item 裡的 data 欄位（它是一個 JSON 字串）\n  const dataString = item.json[\"data\"];\n\n  let parsed = {};\n  try {\n    // 2. 做一次 JSON.parse，把字串還原成物件\n    parsed = JSON.parse(dataString);\n  } catch (error) {\n    // 如果 parse 失敗，可以選擇把 error 印出或繼續保留原值\n    parsed = {};\n    console.error(\"JSON.parse error for data:\", dataString, error);\n  }\n\n  // 3. parsed 這時候應該長得像 { tokens: \"situ\", result: \"學生\" }\n  //    如果要同時保留其他欄位，可寫成：\n  // const merged = { ...item.json, ...parsed };\n\n  // 4. 這裡示範只輸出 parsed 物件（可依需求自行調整）\n  newItems.push({ json: parsed });\n}\n\n// 5. 回傳解析好的陣列\nreturn newItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        460
+      ],
+      "id": "e06a8626-becc-4b78-ac6c-3d34f139ea90",
+      "name": "Parse Data Field"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 此時 $input.all() 會是一個陣列，每筆長得像 { json: { tokens:\"...\", result:\"...\" } }\nconst allItems = $input.all();\nconst mappingList = [];\n\n// 逐筆把 tokens/result 組成 { token, translation }，推到 mappingList\nfor (const item of allItems) {\n  const token = item.json[\"tokens\"] || \"\";\n  const translation = item.json[\"result\"] || \"\";\n  mappingList.push({\n    token: token,\n    translation: translation\n  });\n  \n}\n\n// 回傳後只剩下一筆，裡面帶 mappingList 陣列\nreturn [\n  {\n    json: {\n      mappingList\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        460
+      ],
+      "id": "efdc9d51-9483-45d0-b898-a3024a267cc3",
+      "name": "Build Mapping List"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 取得最上層「When chat message received」的那一筆 item\n// 節點名稱如果不是剛好叫 \"When chat message received\"，請改成你的實際名稱\n\n// 原始排灣語句子，可能存在 paiwanText，也可能存在 message\nconst paiwanText = $('Loop Over Items').first().json.paiwan_sentences\n\n// 之前你已經有 mappingList\nconst mappingList = $input.all()[0].json.mappingList || [];\n\n// 生成多行對照\nconst lines = mappingList.map(e => `- 排灣語：${e.token} → 中文：${e.translation}`);\nconst formattedText = lines.join(\"\\n\");\n\n// 最終回傳時，把 paiwanText 一併帶出\nreturn [\n  {\n    json: {\n      paiwanText,\n      formattedText\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        460
+      ],
+      "id": "7dc15952-32b1-42f5-bf37-471599a06993",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "model": "deepseek-r1-distill-llama-70b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        800
+      ],
+      "id": "f35e8ee0-5eea-490c-9e07-6746cecbd092",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "oeXzhv9XiJNg7m4F",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemma-3-27b-it",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        720
+      ],
+      "id": "ccd8148c-35c4-4774-ad72-d5ecef6aa5c5",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "UgFOMGAfOL0adtlH",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        300
+      ],
+      "id": "ece55585-2961-4dbf-8165-bb88fae2e6b3",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8001/paiwan-sentences",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -440,
+        300
+      ],
+      "id": "9130d8b7-b4d1-4aab-aef2-e3b0c6cc494b",
+      "name": "InputJson"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=你擁有非凡的思考能力。這意味著你會在構思最終答案之前，仔細思考每個步驟。這個思考過程以<thinking>開始，以</thinking>結束。\n\n你是一個排灣語的翻譯專家以下有一個排灣語片段的「詞彙對照」列表，請你根據每個「排灣語詞 → 對應中文」的 mapping，組成一個完整且最通順的中文句子(不一定是句子，可能是單字)，並忠實表達原文含義，如果你覺得改變詞語順序能更通暢，那你可以改變。你也可以參考標點符號去做推測。可能一個詞彙有多個意思，他會以,做區隔。\n\n詞彙對照：\n{{ $json.formattedText }}\n原文:\n{{ $json.paiwanText }}\n最後，請輸出最終完整譯文，並將答案以<ans>開始，以</ans>結束。。\n\n排灣族的文法補充(在接下來的翻譯任務不一定會用到):\n排灣族存在複合詞\n複合詞為具有意義的兩個詞素緊密結合成一個新詞。兩個詞組合成為新詞,中間會有一個標記,可能是a或是na\n如:\nvavayan「女性」+ a + vatu「狗」=「母狗」\nuqaljay「男性」+ a + vatu「狗」=「公狗」\n\nalju「糖」+ na + hana「花」=「花蜜」\nalju「糖」+ na + tjainan「蜜蜂」=「蜂蜜」",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        460
+      ],
+      "id": "622269ba-2207-4b5c-b832-cb1ba0150efd",
+      "name": "Restructure"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "paiwan_sentences",
+        "include": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        300
+      ],
+      "id": "f5218b14-b1ab-4295-bb7b-34291a40e9ba",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        20,
+        300
+      ],
+      "id": "2fef72a7-424c-4e03-9306-b6aad8d287dc",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. 取出 LLM 回傳的原始內容（依你的欄位名稱調整）\nconst raw = $input.first().json.output ?? '';   // 例如 $json.text\n\n// 2. 抓 <ans> ... </ans> 中間的字\nconst match = raw.match(/<ans>([\\s\\S]*?)<\\/ans>/);\nconst answer = match ? match[1].trim() : raw;   // 若沒找到就回整串\n\n// 3. 只輸出想要的欄位\nreturn [{\n  json: { answer }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        460
+      ],
+      "id": "5ef0b316-882f-4c19-9ad5-a211e36b4d0b",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst raw = $input.first().json.answer          // 看你的欄位名稱\nconst match = raw.match(/<ans>([\\s\\S]*?)<\\/ans>/);\nconst answer = match ? match[1].trim() : raw;          // 抓不到就整串返回\n\n// ===== 輸出格式：只保留句子＋答案 =====\nreturn [{\n  json: {\n    answer\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        260
+      ],
+      "id": "3c6b68b1-9ac7-44e2-8ab2-7e853c564e88",
+      "name": "build result"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "results",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        240,
+        200
+      ],
+      "id": "12d2d6db-29b0-4d38-a53a-b72346a05b70",
+      "name": "Aggregate"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Parse Data Field",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Data Field": {
+      "main": [
+        [
+          {
+            "node": "Build Mapping List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Mapping List": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Restructure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Restructure",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "InputJson",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "InputJson": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restructure": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "build result": {
+      "main": [
+        []
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f51b7031-c9b4-433e-a9f9-4c3ea9abe07b",
+  "meta": {
+    "instanceId": "8861219afbd0caae22420ca5012be762f921a122c93ff6471df3080d3d4243ef"
+  },
+  "id": "eunhLs0f6JEx3R1I",
+  "tags": []
+}
