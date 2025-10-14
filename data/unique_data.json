@@ -1,11 +1,60 @@
+
 [
   {
     "paiwan": "na",
     "chinese": "[虛]"
   },
+   {
+    "paiwan": "aken",
+    "chinese": "我"
+  },
+  {
+    "paiwan": "tiaken",
+    "chinese": "我"
+  },
+  {
+    "paiwan": "ku",
+    "chinese": "我的;為什麼、何故"
+  },
+  {
+    "paiwan": "aken",
+    "chinese": "我"
+  },
+  {
+    "paiwan": "ken",
+    "chinese": "我的...;我是..."
+  },
+  {
+    "paiwan": "niaken",
+    "chinese": "我的"
+  },
+  {
+    "paiwan": "sun",
+    "chinese": "你"
+  },
+  {
+    "paiwan": "tisun",
+    "chinese": "你;是你"
+  },
+  {
+    "paiwan": "su",
+    "chinese": "你(的)"
+  },
+  {
+    "paiwan": "nisun",
+    "chinese": "你的"
+  },
+  {
+    "paiwan": "tjanusun",
+    "chinese": "對你..."
+  },
   {
     "paiwan": "tarivaksun",
     "chinese": "您好"
+  },
+  {
+    "paiwan": "zepulj",
+    "chinese": "(人名)"
   },
   {
     "paiwan": "sinsi",
@@ -424,8 +473,16 @@
     "chinese": "學校"
   },
   {
+    "paiwan": "gimeng",
+    "chinese": "學校"
+  },
+  {
     "paiwan": "su umaq",
     "chinese": "你（的）家"
+  },
+  {
+    "paiwan": "maljiqaljan",
+    "chinese": "外地人"
   },
   {
     "paiwan": "djemavadjavac aken",
@@ -812,7 +869,7 @@
     "chinese": "盪鞦韆"
   },
   {
-    "paiwan": "semainu sun",
+    "paiwan": "semainu",
     "chinese": "去哪裡"
   },
   {
@@ -5015,6 +5072,11 @@
     "paiwan": "paisuin",
     "chinese": "摏搗"
   },
+  {
+    "paiwan": "paisu",
+    "chinese": "錢"
+  },
+
   {
     "paiwan": "papevat",
     "chinese": "搗出榖粒"
@@ -9392,7 +9454,7 @@
     "chinese": "咱們的"
   },
   {
-    "paiwan": "imaza",
+    "paiwan": "maza",
     "chinese": "這裡"
   },
   {
@@ -12429,7 +12491,7 @@
   },
   {
     "paiwan": "imaza",
-    "chinese": "在(這裡)"
+    "chinese": "在這裡"
   },
   {
     "paiwan": "maqati",
@@ -12438,5 +12500,13 @@
   {
     "paiwan": "makulung",
     "chinese": "傻瓜"
+  },
+  {
+    "paiwan": "adjav",
+    "chinese": "不知"
+  },
+  {
+    "paiwan": "adjuqianga ",
+    "chinese": "請為...留一些了"
   }
 ]

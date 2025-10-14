@@ -66,20 +66,20 @@ class PaiwanToChineseTranslator:
         """翻譯排灣語為中文"""
         all_translations = []
         
-        # 精確匹配
+        # 精確匹配（若找到則不進行模糊匹配）
         if paiwan_text in self.vocab_dict['paiwan_to_chinese']:
             all_translations.extend(self.vocab_dict['paiwan_to_chinese'][paiwan_text])
-        
-        # 模糊匹配
-        best_score = 0
-        for word, translations in self.vocab_dict['paiwan_to_chinese'].items():
-            similarity = fuzz.ratio(paiwan_text.lower(), word.lower())
-            if similarity > 80 and word != paiwan_text and similarity >= best_score:
-                if similarity > best_score:
-                    best_score = similarity
-                    all_translations = list(translations)
-                elif similarity == best_score:
-                    all_translations.extend(translations)
+        else:
+            # 模糊匹配（僅在沒有精確匹配時執行）
+            best_score = 0
+            for word, translations in self.vocab_dict['paiwan_to_chinese'].items():
+                similarity = fuzz.ratio(paiwan_text.lower(), word.lower())
+                if similarity > 80 and word != paiwan_text and similarity >= best_score:
+                    if similarity > best_score:
+                        best_score = similarity
+                        all_translations = list(translations)
+                    elif similarity == best_score:
+                        all_translations.extend(translations)
         
         # 去除重複並保持順序
         unique_translations = []
