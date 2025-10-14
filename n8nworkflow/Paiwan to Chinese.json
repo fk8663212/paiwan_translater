@@ -1,0 +1,255 @@
+{
+  "name": "Paiwan to Chinese",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/translate/paiwan-to-chinese",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.token }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        272
+      ],
+      "id": "1caa8b81-bd2c-49f7-aca8-1b77ef027a2f",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n 的 Function 節點預設會傳進 $input 變數裡面是「一個 items 陣列」，\n// 這裡假設上游只傳來一筆或多筆，但每筆裡的 data 屬性都要解析。\n\n// 我們要回傳一個 Array，包含解析後的物件\nconst newItems = [];\n\n// 遍歷所有輸入 item\nfor (const item of $input.all()) {\n  // 1. 取得目前 item 裡的 data 欄位（它是一個 JSON 字串）\n  const dataString = item.json[\"data\"];\n\n  let parsed = {};\n  try {\n    // 2. 做一次 JSON.parse，把字串還原成物件\n    parsed = JSON.parse(dataString);\n  } catch (error) {\n    // 如果 parse 失敗，可以選擇把 error 印出或繼續保留原值\n    parsed = {};\n    console.error(\"JSON.parse error for data:\", dataString, error);\n  }\n\n  // 3. parsed 這時候應該長得像 { tokens: \"situ\", result: \"學生\" }\n  //    如果要同時保留其他欄位，可寫成：\n  // const merged = { ...item.json, ...parsed };\n\n  // 4. 這裡示範只輸出 parsed 物件（可依需求自行調整）\n  newItems.push({ json: parsed });\n}\n\n// 5. 回傳解析好的陣列\nreturn newItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        272
+      ],
+      "id": "6e13897a-402b-4b27-87d7-a6c39076c3ad",
+      "name": "Parse Data Field"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 此時 $input.all() 會是一個陣列，每筆長得像 { json: { tokens:\"...\", result:\"...\" } }\nconst allItems = $input.all();\nconst mappingList = [];\n\n// 逐筆把 tokens/result 組成 { token, translation }，推到 mappingList\nfor (const item of allItems) {\n  const token = item.json[\"tokens\"] || \"\";\n  const translation = item.json[\"result\"] || \"\";\n  mappingList.push({\n    token: token,\n    translation: translation\n  });\n  \n}\n\n// 回傳後只剩下一筆，裡面帶 mappingList 陣列\nreturn [\n  {\n    json: {\n      mappingList\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        272
+      ],
+      "id": "be44fbd1-3ee4-4c79-880c-d92c5582b78e",
+      "name": "Build Mapping List"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=你擁有非凡的思考能力。這意味著你會在構思最終答案之前，仔細思考每個步驟。這個思考過程以<thinking>開始，以</thinking>結束。\n\n你是一個排灣語的翻譯專家以下有一個排灣語片段的「詞彙對照」列表，請你根據每個「排灣語詞 → 對應中文」的 mapping，組成一個完整且最通順的中文句子(不一定是句子，可能是單字)，並忠實表達原文含義，如果你覺得改變詞語順序能更通暢，那你可以改變。你也可以參考標點符號去做推測。可能一個詞彙有多個意思，他會以,做區隔。\n\n詞彙對照：\n{{ $json.formattedText }}\n原文:\n{{ $json.paiwanText }}\n最後，請輸出最終完整譯文，並將答案以<ans>開始，以</ans>結束。。\n\n排灣族的文法補充(在接下來的翻譯任務不一定會用到):\n排灣族存在複合詞\n複合詞為具有意義的兩個詞素緊密結合成一個新詞。兩個詞組合成為新詞,中間會有一個標記,可能是a或是na\n如:\nvavayan「女性」+ a + vatu「狗」=「母狗」\nuqaljay「男性」+ a + vatu「狗」=「公狗」\n\nalju「糖」+ na + hana「花」=「花蜜」\nalju「糖」+ na + tjainan「蜜蜂」=「蜂蜜」",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        272
+      ],
+      "id": "916c149b-90f5-4c27-b203-b23d6a9084d2",
+      "name": "Restructure"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. 取出 LLM 回傳的原始內容（依你的欄位名稱調整）\nconst raw = $input.first().json.output ?? '';   // 例如 $json.text\n\n// 2. 抓 <ans> ... </ans> 中間的字\nconst match = raw.match(/<ans>([\\s\\S]*?)<\\/ans>/);\nconst answer = match ? match[1].trim() : raw;   // 若沒找到就回整串\n\n// 3. 只輸出想要的欄位\nreturn [{\n  json: { answer }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        272
+      ],
+      "id": "71d8c82d-5688-433a-b698-0218b7d70a56",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -352,
+        272
+      ],
+      "id": "894fd8e3-c277-4ecc-af6f-4ad5740ad6f5",
+      "name": "When chat message received",
+      "webhookId": "760938e0-b847-46a6-847e-e60b1bc25ed0"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1424,
+        624
+      ],
+      "id": "b0c4050f-43c3-4125-9953-2abff2f58f62",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "rz8BtJcJ38phTyVk",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 錯誤示例：每拆一個 token 就 return 一筆\nconst paiwan = $input.first().json.chatInput;\nconst rawTokens = paiwan.split(/[\\s,，、]+/);\nconst tokens = rawTokens.filter(t => t.trim().length > 0);\nconst results = tokens.map(token => ({ json: { token: token } }));\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        272
+      ],
+      "id": "d9d15f1e-3e69-45b4-a9e7-922a40153a97",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 取得最上層「When chat message received」的那一筆 item\n// 節點名稱如果不是剛好叫 \"When chat message received\"，請改成你的實際名稱\n\n// 原始排灣語句子，可能存在 paiwanText，也可能存在 message\nconst paiwanText = $('When chat message received').first().json.chatInput\n\n// 之前你已經有 mappingList\nconst mappingList = $input.all()[0].json.mappingList || [];\n\n// 生成多行對照\nconst lines = mappingList.map(e => `- 排灣語：${e.token} → 中文：${e.translation}`);\nconst formattedText = lines.join(\"\\n\");\n\n// 最終回傳時，把 paiwanText 一併帶出\nreturn [\n  {\n    json: {\n      paiwanText,\n      formattedText\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        272
+      ],
+      "id": "191241c9-e3c5-4824-9364-ee31b514b4f8",
+      "name": "Code4"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Parse Data Field",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Data Field": {
+      "main": [
+        [
+          {
+            "node": "Build Mapping List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Mapping List": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restructure": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        []
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Restructure",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Restructure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4bb35b1d-6946-4461-b2f0-ecdce1ee99de",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c641aff31dad4d657ed627ee06ea7de73e8bb0cd8e598ed45fcbb1a812e2d7fb"
+  },
+  "id": "iAPWsxFB07hUhR6U",
+  "tags": []
+}
